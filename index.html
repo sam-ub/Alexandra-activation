@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ogudu Activation — Air Quality & Livability Report</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink:#0F1B14;
+    --paper:#E9E7DE;
+    --panel:#FFFFFF;
+    --line:#D2CEC0;
+    --green:#1F5C3F;
+    --green-deep:#123825;
+    --lime:#C6E24E;
+    --coral:#E8593C;
+    --coral-deep:#A93A24;
+    --amber:#D69A2D;
+    --muted:#6B6A5F;
+    --track:#ECEAE1;
+    font-family:'Inter',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--line);color:var(--ink);}
+
+  /* Dense report grid: 1px gaps read as hairline dividers, no white space */
+  .dash{
+    display:grid;
+    grid-template-columns:repeat(6,1fr);
+    grid-template-rows:auto minmax(300px,1fr) 250px;
+    gap:1px;
+    height:100vh;
+    background:var(--line);
+  }
+
+  .panel{
+    background:var(--panel);
+    padding:12px 14px;
+    min-width:0;min-height:0;
+    display:flex;flex-direction:column;
+    overflow:hidden;
+  }
+
+  .p-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px;}
+  .p-head h2{font-family:'Space Grotesk',sans-serif;font-size:12.5px;font-weight:600;margin:0;letter-spacing:-0.01em;}
+  .p-head .hint{font-size:10px;color:var(--muted);}
+
+  /* ---- KPI strip (row 1) ---- */
+  .kpi{
+    grid-row:1;
+    display:flex;flex-direction:column;justify-content:center;gap:3px;
+    padding:10px 14px;
+  }
+  .kpi .k-label{font-size:9.5px;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);font-weight:600;}
+  .kpi .k-value{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:23px;line-height:1;}
+  .kpi .k-value .u{font-size:11px;color:var(--muted);font-weight:500;margin-left:3px;}
+  .kpi .k-sub{font-size:10.5px;color:var(--muted);}
+  .kpi .k-sub.warn{color:var(--coral-deep);font-weight:600;}
+  .kpi .k-sub.ok{color:var(--green);font-weight:600;}
+
+  /* ---- Map panel ---- */
+  .map-panel{grid-column:span 4;grid-row:2;padding:0;}
+  .map-panel .p-head{padding:10px 14px 8px;margin:0;border-bottom:1px solid var(--line);}
+  .map-wrap{flex:1;min-height:0;position:relative;}
+  #map{position:absolute;inset:0;}
+
+  /* ---- Map category filter (left overlay) ---- */
+  .map-filter{
+    position:absolute;top:10px;left:10px;z-index:1000;
+    background:rgba(255,255,255,0.96);border:1px solid var(--line);
+    border-radius:8px;box-shadow:0 2px 10px rgba(15,27,20,0.12);
+    font-size:11px;max-width:200px;
+  }
+  .map-filter .mf-toggle{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    width:100%;padding:8px 10px;border:none;background:transparent;cursor:pointer;
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:11.5px;color:var(--ink);
+  }
+  .map-filter .mf-toggle svg{width:14px;height:14px;transition:transform 0.15s ease;flex-shrink:0;}
+  .map-filter.collapsed .mf-toggle svg{transform:rotate(-90deg);}
+  .map-filter .mf-body{
+    border-top:1px solid var(--line);padding:8px 10px 10px;
+    max-height:220px;overflow-y:auto;
+  }
+  .map-filter.collapsed .mf-body{display:none;}
+  .map-filter .mf-all{
+    display:flex;align-items:center;gap:6px;padding:4px 0 8px;
+    border-bottom:1px solid var(--line);margin-bottom:6px;
+    font-weight:600;font-size:11px;cursor:pointer;
+  }
+  .map-filter .mf-all input,.map-filter .mf-item input{margin:0;cursor:pointer;}
+  .map-filter .mf-item{
+    display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;color:var(--ink);
+  }
+  .map-filter .mf-item .mf-count{margin-left:auto;color:var(--muted);font-size:10px;}
+  .map-filter .mf-item.untagged{color:var(--muted);font-style:italic;}
+
+  /* ---- Insight panel ---- */
+  .insight{grid-column:span 2;grid-row:2;gap:2px;overflow-y:auto;}
+
+  .gauge{margin:2px 0 14px;}
+  .gauge .g-caption{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:6px;}
+  .gauge .g-caption b{font-family:'Space Grotesk',sans-serif;color:var(--ink);font-weight:600;}
+  .gauge .g-scale-wrap{margin-top:16px;}
+  .gauge .g-scale{position:relative;display:flex;height:16px;border-radius:3px;overflow:visible;}
+  .gauge .g-seg{height:100%;border-radius:inherit;}
+  .gauge .g-seg:first-child{border-radius:3px 0 0 3px;}
+  .gauge .g-seg:last-child{border-radius:0 3px 3px 0;}
+  .gauge .g-pointer{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--ink);z-index:1;}
+  .gauge .g-pointer::before{content:'';position:absolute;top:-5px;left:50%;transform:translateX(-50%);
+    border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--ink);}
+  .gauge .g-axis{position:relative;height:20px;margin-top:2px;}
+  .gauge .g-axis-line{position:absolute;top:0;left:0;right:0;height:1px;background:var(--line);}
+  .gauge .g-tick{
+    position:absolute;top:0;font-family:'Space Grotesk',sans-serif;font-size:9.5px;font-weight:600;
+    color:var(--muted);text-align:center;min-width:12px;
+  }
+  .gauge .g-tick::before{
+    content:'';display:block;width:1px;height:5px;background:var(--muted);margin:0 auto 3px;
+  }
+  .gauge .g-tick.edge-start{transform:none;text-align:left;}
+  .gauge .g-tick.edge-start::before{margin-left:0;}
+
+  .meta-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:6px 0;border-top:1px solid var(--line);}
+  .meta-row:first-of-type{border-top:none;}
+  .meta-row .m-label{color:var(--muted);}
+  .meta-row .m-val{font-family:'Space Grotesk',sans-serif;font-weight:600;}
+
+  .ratio{margin:10px 0 4px;}
+  .ratio .r-bar{display:flex;height:14px;border-radius:3px;overflow:hidden;background:var(--track);}
+  .ratio .r-pos{background:var(--green);}
+  .ratio .r-neg{background:var(--coral);}
+  .ratio .r-neu{background:var(--muted);}
+  .ratio .r-legend{display:flex;flex-wrap:wrap;gap:8px 12px;font-size:11px;margin-top:6px;color:var(--muted);}
+  .ratio .r-legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+  .ratio .r-legend .dot.pos{background:var(--green);}
+  .ratio .r-legend .dot.neg{background:var(--coral);}
+  .ratio .r-legend .dot.neu{background:var(--muted);}
+
+  .story-link{
+    margin-top:auto;display:flex;align-items:center;justify-content:center;gap:8px;
+    background:var(--green);color:#fff;text-decoration:none;
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;
+    padding:11px 14px;border-radius:6px;transition:background 0.15s ease;
+  }
+  .story-link:hover{background:var(--green-deep);}
+  .story-link svg{width:15px;height:15px;}
+
+  /* ---- Chart panel ---- */
+  .chart-panel{grid-column:span 4;grid-row:3;}
+  .chart-wrap{flex:1;min-height:0;position:relative;}
+  .load-error{padding:16px 14px;font-size:12px;color:var(--coral-deep);line-height:1.55;}
+  .load-error .le-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;margin-bottom:8px;color:var(--ink);}
+  .load-error .le-detail{margin:8px 0;padding:8px 10px;background:#FFF5F3;border:1px solid #F0D4CC;border-radius:6px;font-family:monospace;font-size:11px;color:#8B2E1F;word-break:break-word;}
+  .load-error .le-hints{margin:8px 0 0;padding-left:18px;color:var(--muted);}
+  .load-error .le-hints li{margin:4px 0;}
+  .load-error .le-stage{font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);margin-bottom:6px;}
+
+  /* ---- Breakdown panel ---- */
+  .breakdown{grid-column:span 2;grid-row:3;overflow-y:auto;}
+  .bar-row{display:flex;align-items:center;gap:8px;font-size:11.5px;margin-bottom:8px;}
+  .bar-row .bl{width:104px;flex-shrink:0;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .bar-row .bt{flex:1;height:11px;background:var(--track);border-radius:2px;overflow:hidden;}
+  .bar-row .bf{height:100%;border-radius:2px;}
+  .bar-row .bf.pos{background:var(--green);}
+  .bar-row .bf.neg{background:var(--coral);}
+  .bar-row .bc{width:16px;text-align:right;font-family:'Space Grotesk',sans-serif;font-weight:600;}
+
+  .cat-table{width:100%;border-collapse:collapse;font-size:11.5px;}
+  .cat-table th{font-weight:600;text-align:right;color:var(--muted);font-size:9.5px;text-transform:uppercase;letter-spacing:0.04em;padding:0 0 6px;border-bottom:1px solid var(--line);}
+  .cat-table th.cat{text-align:left;}
+  .cat-table td{padding:5px 0;border-bottom:1px solid var(--line);text-align:right;font-family:'Space Grotesk',sans-serif;font-weight:600;width:34px;}
+  .cat-table td.cat{text-align:left;font-family:'Inter',sans-serif;font-weight:400;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;width:auto;}
+  .cat-table td.pos{color:var(--green);}
+  .cat-table td.neg{color:var(--coral);}
+  .cat-table td.neu{color:var(--muted);}
+  .cat-table td.tot{color:var(--ink);}
+  .cat-table tr.untagged-row td.cat{font-style:italic;color:var(--muted);}
+
+  /* ---- Map markers / popups ---- */
+  .cluster-marker{
+    background:var(--green);color:var(--lime);
+    border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:12px;
+    border:2px solid var(--paper);
+  }
+  .feature-marker{width:16px;height:16px;border-radius:50%;border:2px solid var(--paper);}
+  .feature-marker.positive{background:var(--green);}
+  .feature-marker.negative{background:var(--coral);}
+  .feature-marker.neutral{background:var(--muted);}
+  .sensor-ping{
+    width:14px;height:14px;border-radius:50%;background:#1E3FAE;
+    border:2px solid #fff;box-shadow:0 0 0 4px rgba(30,63,174,0.30);
+  }
+  .leaflet-popup-content-wrapper{border-radius:8px;}
+  .popup-card{font-family:'Inter',sans-serif;width:200px;}
+  .popup-card img{width:100%;height:120px;object-fit:cover;border-radius:6px;margin-bottom:8px;display:block;}
+  .popup-card .ptype{font-size:10px;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-bottom:4px;}
+  .popup-card .ptype.positive{color:var(--green);}
+  .popup-card .ptype.negative{color:var(--coral-deep);}
+  .popup-card .plabel{font-weight:600;font-size:13px;margin-bottom:4px;}
+  .popup-card .pnote{font-size:12px;color:var(--muted);line-height:1.4;}
+
+  @media (max-width: 1000px){
+    .dash{grid-template-columns:repeat(2,1fr);grid-template-rows:auto auto 320px 250px 250px;height:auto;}
+    .kpi{grid-row:auto;}
+    .map-panel{grid-column:1 / -1;grid-row:auto;min-height:320px;}
+    .insight{grid-column:1 / -1;grid-row:auto;}
+    .chart-panel{grid-column:1 / -1;grid-row:auto;}
+    .breakdown{grid-column:1 / -1;grid-row:auto;}
+  }
+</style>
+</head>
+<body>
+
+<div class="dash">
+
+  <div class="panel kpi">
+    <div class="k-label">Avg PM2.5</div>
+    <div class="k-value" id="kAvg">—<span class="u">µg/m³</span></div>
+    <div class="k-sub" id="kAvgSub">vs WHO 15</div>
+  </div>
+  <div class="panel kpi">
+    <div class="k-label">Peak PM2.5</div>
+    <div class="k-value" id="kPeak">—<span class="u">µg/m³</span></div>
+    <div class="k-sub" id="kPeakSub">worst segment</div>
+  </div>
+  <div class="panel kpi">
+    <div class="k-label">Min PM2.5</div>
+    <div class="k-value" id="kMin">—<span class="u">µg/m³</span></div>
+    <div class="k-sub" id="kMinSub">cleanest segment</div>
+  </div>
+  <div class="panel kpi">
+    <div class="k-label">Air quality</div>
+    <div class="k-value" id="kWho">—</div>
+    <div class="k-sub" id="kWhoSub">US EPA AQI</div>
+  </div>
+  <div class="panel kpi">
+    <div class="k-label">Observations</div>
+    <div class="k-value" id="kObs">—</div>
+    <div class="k-sub" id="kObsSub">livability features</div>
+  </div>
+  <div class="panel kpi">
+    <div class="k-label">Sensor spread</div>
+    <div class="k-value" id="kSpread">—<span class="u">µg/m³</span></div>
+    <div class="k-sub">max sensor disagreement</div>
+  </div>
+
+  <section class="panel map-panel">
+    <div class="p-head">
+      <h2>Route &amp; observations</h2>
+      <span class="hint">Click a marker for detail</span>
+    </div>
+    <div class="map-wrap">
+      <div id="map"></div>
+      <div class="map-filter collapsed" id="mapFilter">
+        <button type="button" class="mf-toggle" id="mapFilterToggle" aria-expanded="false">
+          Filter categories
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="mf-body" id="mapFilterBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel insight">
+    <div class="p-head">
+      <h2>Air quality (US EPA AQI)</h2>
+      <span class="hint">PM2.5 categories</span>
+    </div>
+
+    <div class="gauge">
+      <div class="g-caption"><span>Route average</span><b id="gaugeVal">—</b></div>
+      <div class="g-scale-wrap">
+        <div class="g-scale" id="gaugeScale"></div>
+        <div class="g-axis" id="gaugeAxis"></div>
+      </div>
+    </div>
+
+    <div class="meta-row"><span class="m-label">Route category mix</span><span class="m-val" id="mExceed">—</span></div>
+    <div class="meta-row"><span class="m-label">Sensors deployed</span><span class="m-val" id="mSensors">—</span></div>
+    <div class="meta-row"><span class="m-label">Sample points</span><span class="m-val" id="mPoints">—</span></div>
+    <div class="meta-row"><span class="m-label">Route length</span><span class="m-val" id="mRoute">—</span></div>
+
+    <div class="ratio">
+      <div class="r-bar">
+        <div class="r-pos" id="rPos" style="width:33%"></div>
+        <div class="r-neg" id="rNeg" style="width:33%"></div>
+        <div class="r-neu" id="rNeu" style="width:34%"></div>
+      </div>
+      <div class="r-legend">
+        <span><span class="dot pos"></span>Positive <b id="rPosN">0</b></span>
+        <span><span class="dot neg"></span>Negative <b id="rNegN">0</b></span>
+        <span><span class="dot neu"></span>Neutral <b id="rNeuN">0</b></span>
+      </div>
+    </div>
+
+    <a href="storymap.html" class="story-link">
+      View impact story
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+    </a>
+  </aside>
+
+  <section class="panel chart-panel">
+    <div class="p-head">
+      <h2>PM2.5 along the route</h2>
+      <span class="hint">Real AirBeam data · one line per sensor · US EPA AQI bands — hover to trace on map</span>
+    </div>
+    <div class="chart-wrap" id="chartWrap">
+      <canvas id="pmChart"></canvas>
+    </div>
+  </section>
+
+  <section class="panel breakdown">
+    <div class="p-head">
+      <h2>Observations by category</h2>
+      <span class="hint">positive · negative · neutral · total</span>
+    </div>
+    <div id="issueBars"></div>
+  </section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ogudu Activation — Impact Story | UrbanBetter</title>
+<link rel="stylesheet" href="https://cdn.knightlab.com/libs/storymapjs/latest/css/storymap.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;font-family:'Inter',sans-serif;background:#0F1B14;}
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 24px;background:#0F1B14;border-bottom:1px solid #1F5C3F;
+  }
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand .mark{
+    width:30px;height:30px;border-radius:7px;background:#1F5C3F;
+    display:flex;align-items:center;justify-content:center;
+    color:#C6E24E;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;
+  }
+  .brand .name{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;color:#F5F3EC;}
+  .back-link{
+    display:flex;align-items:center;gap:6px;color:#C6E24E;text-decoration:none;
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;
+  }
+  .back-link:hover{color:#fff;}
+  #storymap{
+    width:100%;
+    height:calc(100vh - 60px);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="mark">UB</div>
+    <div class="name">UrbanBetter — Ogudu Activation</div>
+  </div>
+  <a href="index.html" class="back-link">&larr; Back to dashboard</a>
+</header>
+
+<div id="storymap"></div>
+
+<script src="https://cdn.knightlab.com/libs/storymapjs/latest/js/storymap-min.js"></script>
+<script src="storymap-data.js"></script>
+<script>
+  window.addEventListener('load', function () {
+    new VCO.StoryMap('storymap', window.STORYMAP_DATA, {
+      map_as_image: false
+    });
+  });
+</script>
+</body>
+</html>
