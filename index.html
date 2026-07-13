@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ogudu Activation — Air Quality & Livability Report</title>
+<title>Pretoria Activation — Air Quality & Livability Report</title>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
@@ -102,8 +102,13 @@
   .map-filter .mf-item .mf-count{margin-left:auto;color:var(--muted);font-size:10px;}
   .map-filter .mf-item.untagged{color:var(--muted);font-style:italic;}
 
-  /* ---- Insight panel ---- */
-  .insight{grid-column:span 2;grid-row:2;gap:2px;overflow-y:auto;}
+  /* ---- Insight panel (full height beside map + chart) ---- */
+  .insight{
+    grid-column:span 2;
+    grid-row:2 / 4;
+    gap:0;
+    overflow-y:auto;
+  }
 
   .gauge{margin:2px 0 14px;}
   .gauge .g-caption{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:6px;}
@@ -133,7 +138,7 @@
   .meta-row .m-label{color:var(--muted);}
   .meta-row .m-val{font-family:'Space Grotesk',sans-serif;font-weight:600;}
 
-  .ratio{margin:10px 0 4px;}
+  .ratio{margin:10px 0 0;flex-shrink:0;}
   .ratio .r-bar{display:flex;height:14px;border-radius:3px;overflow:hidden;background:var(--track);}
   .ratio .r-pos{background:var(--green);}
   .ratio .r-neg{background:var(--coral);}
@@ -144,12 +149,7 @@
   .ratio .r-legend .dot.neg{background:var(--coral);}
   .ratio .r-legend .dot.neu{background:var(--muted);}
 
-  .story-link{
-    margin-top:auto;display:flex;align-items:center;justify-content:center;gap:8px;
-    background:var(--green);color:#fff;text-decoration:none;
-    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;
-    padding:11px 14px;border-radius:6px;transition:background 0.15s ease;
-  }
+  .story-link{display:none;}
   .story-link:hover{background:var(--green-deep);}
   .story-link svg{width:15px;height:15px;}
 
@@ -163,26 +163,50 @@
   .load-error .le-hints li{margin:4px 0;}
   .load-error .le-stage{font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);margin-bottom:6px;}
 
-  /* ---- Breakdown panel ---- */
-  .breakdown{grid-column:span 2;grid-row:3;overflow-y:auto;}
-  .bar-row{display:flex;align-items:center;gap:8px;font-size:11.5px;margin-bottom:8px;}
-  .bar-row .bl{width:104px;flex-shrink:0;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .bar-row .bt{flex:1;height:11px;background:var(--track);border-radius:2px;overflow:hidden;}
-  .bar-row .bf{height:100%;border-radius:2px;}
-  .bar-row .bf.pos{background:var(--green);}
-  .bar-row .bf.neg{background:var(--coral);}
-  .bar-row .bc{width:16px;text-align:right;font-family:'Space Grotesk',sans-serif;font-weight:600;}
+  /* Category table lives inside the aside */
+  .insight .breakdown{
+    margin-top:8px;padding-top:8px;border-top:1px solid var(--line);
+    flex:1;min-height:0;overflow-y:auto;
+  }
+  .insight .breakdown .p-head{margin-bottom:4px;}
 
   .cat-table{width:100%;border-collapse:collapse;font-size:11.5px;}
-  .cat-table th{font-weight:600;text-align:right;color:var(--muted);font-size:9.5px;text-transform:uppercase;letter-spacing:0.04em;padding:0 0 6px;border-bottom:1px solid var(--line);}
+  .cat-table th{font-weight:600;text-align:right;color:var(--muted);font-size:9.5px;text-transform:uppercase;letter-spacing:0.04em;padding:0 0 4px;border-bottom:1px solid var(--line);}
   .cat-table th.cat{text-align:left;}
-  .cat-table td{padding:5px 0;border-bottom:1px solid var(--line);text-align:right;font-family:'Space Grotesk',sans-serif;font-weight:600;width:34px;}
+  .cat-table td{padding:4px 0;border-bottom:1px solid var(--line);text-align:right;font-family:'Space Grotesk',sans-serif;font-weight:600;width:34px;}
   .cat-table td.cat{text-align:left;font-family:'Inter',sans-serif;font-weight:400;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;width:auto;}
   .cat-table td.pos{color:var(--green);}
   .cat-table td.neg{color:var(--coral);}
   .cat-table td.neu{color:var(--muted);}
   .cat-table td.tot{color:var(--ink);}
   .cat-table tr.untagged-row td.cat{font-style:italic;color:var(--muted);}
+
+  /* Route start / finish pins */
+  .route-endpoint-icon{background:transparent !important;border:none !important;}
+  .route-endpoint{
+    display:flex;flex-direction:column;align-items:center;gap:1px;
+    pointer-events:none;
+  }
+  .route-endpoint .ep-label{
+    font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10px;
+    letter-spacing:0.04em;text-transform:uppercase;color:#fff;
+    padding:3px 8px;border-radius:3px;white-space:nowrap;
+    box-shadow:0 1px 4px rgba(15,27,20,0.35);
+  }
+  .route-endpoint.start .ep-label{background:var(--green);}
+  .route-endpoint.finish .ep-label{background:var(--ink);}
+  .route-endpoint .ep-pin{
+    width:0;height:0;
+    border-left:6px solid transparent;border-right:6px solid transparent;
+  }
+  .route-endpoint.start .ep-pin{border-top:8px solid var(--green);}
+  .route-endpoint.finish .ep-pin{border-top:8px solid var(--ink);}
+  .route-endpoint .ep-dot{
+    width:11px;height:11px;border-radius:50%;border:2px solid #fff;
+    margin-top:-3px;box-shadow:0 0 0 1px rgba(15,27,20,0.2);
+  }
+  .route-endpoint.start .ep-dot{background:var(--lime);}
+  .route-endpoint.finish .ep-dot{background:var(--ink);}
 
   /* ---- Map markers / popups ---- */
   .cluster-marker{
@@ -200,7 +224,13 @@
     border:2px solid #fff;box-shadow:0 0 0 4px rgba(30,63,174,0.30);
   }
   .leaflet-popup-content-wrapper{border-radius:8px;}
-  .popup-card{font-family:'Inter',sans-serif;width:200px;}
+  .leaflet-popup.spot-popup a.leaflet-popup-close-button{
+    top:6px;right:6px;width:22px;height:22px;line-height:20px;
+    border-radius:50%;background:rgba(15,27,20,0.7);color:#fff;
+    font-size:15px;font-weight:600;padding:0;text-align:center;z-index:2;
+  }
+  .leaflet-popup.spot-popup a.leaflet-popup-close-button:hover{background:var(--ink);color:#fff;}
+  .popup-card{font-family:'Inter',sans-serif;width:200px;position:relative;}
   .popup-card img{width:100%;height:120px;object-fit:cover;border-radius:6px;margin-bottom:8px;display:block;}
   .popup-card .ptype{font-size:10px;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-bottom:4px;}
   .popup-card .ptype.positive{color:var(--green);}
@@ -209,12 +239,11 @@
   .popup-card .pnote{font-size:12px;color:var(--muted);line-height:1.4;}
 
   @media (max-width: 1000px){
-    .dash{grid-template-columns:repeat(2,1fr);grid-template-rows:auto auto 320px 250px 250px;height:auto;}
+    .dash{grid-template-columns:repeat(2,1fr);grid-template-rows:auto auto 320px 250px;height:auto;}
     .kpi{grid-row:auto;}
     .map-panel{grid-column:1 / -1;grid-row:auto;min-height:320px;}
-    .insight{grid-column:1 / -1;grid-row:auto;}
+    .insight{grid-column:1 / -1;grid-row:auto;max-height:520px;}
     .chart-panel{grid-column:1 / -1;grid-row:auto;}
-    .breakdown{grid-column:1 / -1;grid-row:auto;}
   }
 </style>
 </head>
@@ -302,6 +331,14 @@
       </div>
     </div>
 
+    <div class="breakdown">
+      <div class="p-head">
+        <h2>Observations by category</h2>
+        <span class="hint">positive · negative · neutral · total</span>
+      </div>
+      <div id="issueBars"></div>
+    </div>
+
     <a href="storymap.html" class="story-link">
       View impact story
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
@@ -316,14 +353,6 @@
     <div class="chart-wrap" id="chartWrap">
       <canvas id="pmChart"></canvas>
     </div>
-  </section>
-
-  <section class="panel breakdown">
-    <div class="p-head">
-      <h2>Observations by category</h2>
-      <span class="hint">positive · negative · neutral · total</span>
-    </div>
-    <div id="issueBars"></div>
   </section>
 
 </div>

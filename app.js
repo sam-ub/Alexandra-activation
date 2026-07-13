@@ -24,18 +24,21 @@
     el.innerHTML = `<div class="g-axis-line"></div>${ticks}`;
   }
 
-  // Real AirBeam 3 exports (one recording session per file).
+  // AirBeam 3 session export (AirCasting wide CSV).
   const AIRBEAM_FILES = [
-    'data/data_AirBeam3_0cb815aa87e8.csv',
-    'data/data_AirBeam3_94e686f652c8.csv',
-    'data/data_AirBeam3_0cb815a920b8.csv',
-    'data/data_AirBeam3_30cb815aa87e8.csv',
+    'data/africa_clean_air_forum_pretoria_run_1968451__20260713-609362-kikvvf.csv',
   ];
-  // Real citizen observations ("spots") export from SpotterOn (semicolon-delimited).
-  const SPOTS_FILE = 'data/urbanbetter_spots_20260707220128.csv';
+  // SpotterOn observations export (semicolon-delimited). Filtered to this activation.
+  const SPOTS_FILE = 'data/urbanbetter_spots_20260713124805.csv';
+  const SPOTS_FILTER = {
+    datePrefix: '2026-07-13',
+    // Pretoria / Africa Clean Air Forum run area
+    minLat: -25.80, maxLat: -25.70,
+    minLon: 28.22, maxLon: 28.30,
+  };
 
-  const MIN_ROWS = 300;   // drop partial/aborted sessions (e.g. the 87-row file)
-  const BIN_MS = 60000;   // aggregate readings per minute of clock time
+  const MIN_ROWS = 100;   // drop very short / aborted sessions
+  const CHART_Y_MAX = 150;
 
   // ---------- Map base ----------
   const map = L.map('map', { zoomControl: true, scrollWheelZoom: true });
@@ -43,7 +46,7 @@
     maxZoom: 20,
     attribution: '&copy; OpenStreetMap &copy; CARTO'
   }).addTo(map);
-  map.setView([6.5765, 3.392], 15);
+  map.setView([-25.7513, 28.2591], 17);
 
   // ---------- Shared helpers ----------
   function haversine(a, b) {
@@ -87,10 +90,26 @@
   }
 
   const SENSOR_COLORS = ['#E8593C', '#1F5C3F', '#3B6EA5', '#D69A2D', '#8E44AD', '#127475', '#B5651D'];
-  const shortId = file => { const m = file.match(/AirBeam3_([0-9a-f]+)\.csv/i); return m ? m[1].slice(-4) : ''; };
+  const shortId = (file, fallback) => {
+    const mac = file.match(/AirBeam3[_:]([0-9a-f]+)/i);
+    if (mac) return mac[1].slice(-4);
+    const sess = file.match(/_(\d{6,})__/);
+    if (sess) return sess[1].slice(-4);
+    return fallback || '';
+  };
 
-  const parseTime = s => { const t = Date.parse((s || '').replace(' ', 'T')); return isFinite(t) ? t : NaN; };
-  const fmtHM = ms => { const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  const parseTime = s => {
+    if (!s) return NaN;
+    const t = Date.parse(String(s).trim().replace(' ', 'T'));
+    return isFinite(t) ? t : NaN;
+  };
+  const fmtHM = ms => {
+    const d = new Date(ms);
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    const s = String(d.getSeconds()).padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  };
   const isNum = v => Number.isFinite(v); // rejects null (isFinite(null) wrongly passes)
 
   function downsample(pts, max) {
@@ -130,6 +149,81 @@
       });
   }
 
+  // AirCasting "wide" export: multi-row metadata, then ObjectID,Session_Name,Timestamp,...
+  function parseAirCastingWide(text) {
+    const raw = [];
+    let field = '', row = [], q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+        else field += c;
+      } else {
+        if (c === '"') q = true;
+        else if (c === ',') { row.push(field); field = ''; }
+        else if (c === '\n') { row.push(field); raw.push(row); row = []; field = ''; }
+        else if (c !== '\r') field += c;
+      }
+    }
+    if (field.length || row.length) { row.push(field); raw.push(row); }
+
+    const headerIdx = raw.findIndex(r => (r[0] || '').trim() === 'ObjectID');
+    if (headerIdx < 0) return { rows: [], sensorId: '' };
+
+    let pmCol = -1;
+    let sensorId = '';
+    for (let i = 0; i < headerIdx; i++) {
+      const cells = raw[i].map(c => (c || '').trim());
+      cells.forEach((c, idx) => {
+        if (/^AirBeam3:[0-9a-f]+$/i.test(c) && !sensorId) sensorId = c.split(':')[1];
+        if (/PM2\.?5/i.test(c)) pmCol = idx;
+      });
+    }
+    const header = raw[headerIdx].map(h => (h || '').trim());
+    if (pmCol < 0) {
+      pmCol = header.findIndex(h => /^4:Measurement_Value$/i.test(h));
+    }
+    const latCol = header.findIndex(h => /^Latitude$/i.test(h));
+    const lonCol = header.findIndex(h => /^Longitude$/i.test(h));
+    const timeCol = header.findIndex(h => /^Timestamp$/i.test(h));
+    if (pmCol < 0 || latCol < 0 || lonCol < 0 || timeCol < 0) return { rows: [], sensorId };
+
+    const rows = [];
+    for (let i = headerIdx + 1; i < raw.length; i++) {
+      const r = raw[i];
+      if (!r || r.length < 2) continue;
+      rows.push({
+        latitude: (r[latCol] || '').trim(),
+        longitude: (r[lonCol] || '').trim(),
+        time: (r[timeCol] || '').trim(),
+        pm2_5: (r[pmCol] || '').trim(),
+      });
+    }
+    return { rows, sensorId };
+  }
+
+  function airbeamRowsFromText(text) {
+    if (/Sensor_Package_Name|^\s*ObjectID,/m.test(text) && /Timestamp/i.test(text)) {
+      return parseAirCastingWide(text);
+    }
+    return { rows: parseCSV(text, ','), sensorId: '' };
+  }
+
+  function spotInActivation(sp) {
+    if (!SPOTS_FILTER) return true;
+    const { datePrefix, minLat, maxLat, minLon, maxLon } = SPOTS_FILTER;
+    if (datePrefix) {
+      const when = sp.time || '';
+      // normalizeSpot stores SPOTTED_AT on .time; also allow CREATED_AT via raw check below
+      if (!String(when).startsWith(datePrefix)) return false;
+    }
+    if (isFinite(minLat) && sp.lat < minLat) return false;
+    if (isFinite(maxLat) && sp.lat > maxLat) return false;
+    if (isFinite(minLon) && sp.lon < minLon) return false;
+    if (isFinite(maxLon) && sp.lon > maxLon) return false;
+    return true;
+  }
+
   // ---------- Sensor position marker (moves on chart hover) ----------
   const sensorPingIcon = L.divIcon({ className: '', html: `<div class="sensor-ping"></div>`, iconSize: [14, 14] });
   let denseTrack = [];      // one [lat,lon] per chart x-position (primary sensor)
@@ -156,16 +250,34 @@
   function hideSensorMarker() { if (sensorMarker) sensorMarker.setOpacity(0); }
 
   // ---------- Route drawing ----------
-  // Single route line (the primary sensor's GPS track). Observations are separate point markers.
-  function drawRoute(primaryTrack, distMeters) {
-    L.polyline(primaryTrack, { color: '#7EC1F0', weight: 2, opacity: 0.95, lineJoin: 'round', smoothFactor: 2 }).addTo(map);
+  // AQI-coloured points along the primary sensor track (one per time bin).
+  function drawRoute(routePoints, distMeters) {
+    if (!routePoints || !routePoints.length) return;
 
-    L.circleMarker(primaryTrack[0], { radius: 6, color: '#123825', fillColor: '#C6E24E', fillOpacity: 1, weight: 2 })
-      .addTo(map).bindTooltip('Start');
-    L.circleMarker(primaryTrack[primaryTrack.length - 1], { radius: 6, color: '#123825', fillColor: '#123825', fillOpacity: 1, weight: 2 })
-      .addTo(map).bindTooltip('Finish');
+    const bounds = [];
+    routePoints.forEach(pt => {
+      const cat = aqiCategory(pt.pm);
+      L.circleMarker([pt.lat, pt.lon], {
+        radius: 5,
+        color: '#fff',
+        weight: 1,
+        fillColor: cat.bar,
+        fillOpacity: 0.9,
+      }).addTo(map).bindTooltip(`${pt.pm.toFixed(1)} µg/m³ · ${cat.label}`);
+      bounds.push([pt.lat, pt.lon]);
+    });
 
-    map.fitBounds(L.latLngBounds(primaryTrack).pad(0.2));
+    const first = routePoints[0], last = routePoints[routePoints.length - 1];
+    const endpointIcon = (kind, label) => L.divIcon({
+      className: 'route-endpoint-icon',
+      html: `<div class="route-endpoint ${kind}"><span class="ep-label">${label}</span><span class="ep-pin"></span><span class="ep-dot"></span></div>`,
+      iconSize: [72, 42],
+      iconAnchor: [36, 42],
+    });
+    L.marker([first.lat, first.lon], { icon: endpointIcon('start', 'Start'), interactive: false, zIndexOffset: 600 }).addTo(map);
+    L.marker([last.lat, last.lon], { icon: endpointIcon('finish', 'Finish'), interactive: false, zIndexOffset: 600 }).addTo(map);
+
+    map.fitBounds(L.latLngBounds(bounds).pad(0.25));
     if (isFinite(distMeters)) {
       document.getElementById('mRoute').textContent = `${(distMeters / 1000).toFixed(2)} km`;
     }
@@ -221,6 +333,36 @@
       .sort((a, b) => b.count - a.count);
   }
 
+  // One open image-popup per nearby group (matches cluster radius). Prefer spots with photos.
+  const POPUP_GROUP_M = 80;
+  function pickDefaultPopupSpots(spots) {
+    const ranked = [...spots].sort((a, b) => {
+      const ai = a.image ? 1 : 0, bi = b.image ? 1 : 0;
+      if (bi !== ai) return bi - ai;
+      return String(b.time).localeCompare(String(a.time));
+    });
+    const chosen = [];
+    ranked.forEach(sp => {
+      const near = chosen.some(c => haversine([c.lat, c.lon], [sp.lat, sp.lon]) < POPUP_GROUP_M);
+      if (!near) chosen.push(sp);
+    });
+    return chosen;
+  }
+
+  function spotPopupHtml(sp) {
+    const typeLabel = sp.type === 'negative' ? 'Negative observation'
+      : sp.type === 'positive' ? 'Positive observation' : 'Observation (untagged)';
+    return `
+      <div class="popup-card">
+        ${sp.image ? `<img src="${escapeHtml(sp.image)}" alt="observation" onerror="this.style.display='none'"/>` : ''}
+        <div class="ptype ${sp.type}">${typeLabel}</div>
+        ${sp.posTags.length ? `<div class="plabel" style="color:var(--green)">+ ${escapeHtml(sp.posTags.join(', '))}</div>` : ''}
+        ${sp.negTags.length ? `<div class="plabel" style="color:var(--coral-deep)">− ${escapeHtml(sp.negTags.join(', '))}</div>` : ''}
+        ${sp.desc ? `<div class="pnote">${escapeHtml(sp.desc)}</div>` : ''}
+        ${sp.time ? `<div class="pnote" style="margin-top:4px;opacity:.65">${escapeHtml(sp.time)}</div>` : ''}
+      </div>`;
+  }
+
   function makeClusterGroup() {
     return L.markerClusterGroup({
       maxClusterRadius: 50,
@@ -236,34 +378,51 @@
         const size = count > 9 ? 38 : 32;
         return L.divIcon({
           html: `<div class="cluster-marker" style="width:${size}px;height:${size}px;background:${bg};color:${fg};">${count}</div>`,
-          className: '', iconSize: null
+          className: '',
+          iconSize: null,
         });
       }
     });
   }
 
   function makeSpotMarker(sp) {
-    const icon = L.divIcon({ className: '', html: `<div class="feature-marker ${sp.type}"></div>`, iconSize: [16, 16] });
-    const marker = L.marker([sp.lat, sp.lon], { icon, spotType: sp.type });
-    const typeLabel = sp.type === 'negative' ? 'Negative observation'
-      : sp.type === 'positive' ? 'Positive observation' : 'Observation (untagged)';
-    marker.bindPopup(`
-      <div class="popup-card">
-        ${sp.image ? `<img src="${sp.image}" alt="observation" onerror="this.style.display='none'"/>` : ''}
-        <div class="ptype ${sp.type}">${typeLabel}</div>
-        ${sp.posTags.length ? `<div class="plabel" style="color:var(--green)">+ ${escapeHtml(sp.posTags.join(', '))}</div>` : ''}
-        ${sp.negTags.length ? `<div class="plabel" style="color:var(--coral-deep)">− ${escapeHtml(sp.negTags.join(', '))}</div>` : ''}
-        ${sp.desc ? `<div class="pnote">${escapeHtml(sp.desc)}</div>` : ''}
-        ${sp.time ? `<div class="pnote" style="margin-top:4px;opacity:.65">${escapeHtml(sp.time)}</div>` : ''}
-      </div>
-    `);
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="feature-marker ${sp.type}"></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    });
+    const marker = L.marker([sp.lat, sp.lon], {
+      icon,
+      spotType: sp.type,
+      spotKey: `${sp.lat.toFixed(6)},${sp.lon.toFixed(6)},${sp.time}`,
+    });
+    marker.bindPopup(spotPopupHtml(sp), {
+      className: 'spot-popup',
+      closeButton: true,
+      maxWidth: 220,
+      autoClose: false,
+      closeOnClick: false,
+      autoPan: false,
+    });
     return marker;
   }
 
   function applyCategoryFilter() {
     if (!spotClusterGroup) return;
+    map.closePopup();
     spotClusterGroup.clearLayers();
-    allSpots.filter(spotMatchesFilter).forEach(sp => spotClusterGroup.addLayer(makeSpotMarker(sp)));
+    const visible = allSpots.filter(spotMatchesFilter);
+    const markers = visible.map(sp => {
+      const m = makeSpotMarker(sp);
+      spotClusterGroup.addLayer(m);
+      return m;
+    });
+    // Open the usual click-popup by default — one per nearby cluster of points.
+    const openKeys = new Set(pickDefaultPopupSpots(visible).map(sp => `${sp.lat.toFixed(6)},${sp.lon.toFixed(6)},${sp.time}`));
+    markers.forEach(m => {
+      if (openKeys.has(m.options.spotKey)) m.openPopup();
+    });
   }
 
   function setupMapFilter(categories) {
@@ -370,7 +529,9 @@
     const pts = [];
     for (const r of rows) {
       const lat = +r.latitude, lon = +r.longitude, pm = +r.pm2_5, t = parseTime(r.time);
-      if (isFinite(lat) && isFinite(lon) && isFinite(pm) && isFinite(t)) pts.push({ t, lat, lon, pm });
+      // Drop missing GPS/time and zero PM2.5 readings (sensor glitches / placeholders).
+      if (!isFinite(lat) || !isFinite(lon) || !isFinite(pm) || !isFinite(t) || pm <= 0) continue;
+      pts.push({ t, lat, lon, pm });
     }
     if (pts.length < 2) return null;
     pts.sort((a, b) => a.t - b.t);
@@ -383,7 +544,7 @@
     return { pts, track, dist, count: pts.length };
   }
 
-  // Nearest-neighbour fill for the per-minute coordinate track (hover marker).
+  // Nearest-neighbour fill for gaps in the hover coordinate track.
   function fillCoordNulls(a) {
     const first = a.findIndex(x => x);
     if (first < 0) return;
@@ -392,32 +553,32 @@
     for (let i = first + 1; i < a.length; i++) { if (a[i]) last = i; else a[i] = a[last]; }
   }
 
-  // Aggregate every session onto a shared clock-time (per-minute) axis.
+  // One chart/map point per raw reading (no time aggregation).
   function buildTimeSeries(sessions, primary) {
-    let start = Infinity, end = -Infinity;
-    sessions.forEach(s => { for (const p of s.pts) { if (p.t < start) start = p.t; if (p.t > end) end = p.t; } });
-    const nBins = Math.max(1, Math.floor((end - start) / BIN_MS) + 1);
-    const labels = [];
-    for (let b = 0; b < nBins; b++) labels.push(fmtHM(start + b * BIN_MS));
-
-    const binOf = t => Math.max(0, Math.min(nBins - 1, Math.floor((t - start) / BIN_MS)));
+    const timeSet = new Set();
+    sessions.forEach(s => s.pts.forEach(p => timeSet.add(p.t)));
+    const times = [...timeSet].sort((a, b) => a - b);
+    const labels = times.map(fmtHM);
 
     const series = sessions.map((s, i) => {
-      const sums = new Array(nBins).fill(0), counts = new Array(nBins).fill(0);
-      for (const p of s.pts) { const b = binOf(p.t); sums[b] += p.pm; counts[b]++; }
-      const data = new Array(nBins).fill(null);
-      for (let b = 0; b < nBins; b++) if (counts[b]) data[b] = +(sums[b] / counts[b]).toFixed(1);
-      return { label: 'AirBeam ' + (s.id || (i + 1)), data, color: SENSOR_COLORS[i % SENSOR_COLORS.length] };
+      const byT = new Map(s.pts.map(p => [p.t, p.pm]));
+      return {
+        label: 'AirBeam ' + (s.id || (i + 1)),
+        data: times.map(t => (byT.has(t) ? +(+byT.get(t)).toFixed(1) : null)),
+        color: SENSOR_COLORS[i % SENSOR_COLORS.length],
+      };
     });
 
-    // Primary sensor's average coordinate per minute — used for the hover ping.
-    const latS = new Array(nBins).fill(0), lonS = new Array(nBins).fill(0), cc = new Array(nBins).fill(0);
-    for (const p of primary.pts) { const b = binOf(p.t); latS[b] += p.lat; lonS[b] += p.lon; cc[b]++; }
-    const coordTrack = new Array(nBins).fill(null);
-    for (let b = 0; b < nBins; b++) if (cc[b]) coordTrack[b] = [latS[b] / cc[b], lonS[b] / cc[b]];
+    const byTPrimary = new Map(primary.pts.map(p => [p.t, p]));
+    const coordTrack = times.map(t => {
+      const p = byTPrimary.get(t);
+      return p ? [p.lat, p.lon] : null;
+    });
     fillCoordNulls(coordTrack);
 
-    return { labels, series, coordTrack };
+    const routePoints = primary.pts.map(p => ({ lat: p.lat, lon: p.lon, pm: p.pm }));
+
+    return { labels, series, coordTrack, routePoints };
   }
 
   // ---------- Chart background: EPA AQI colour bands ----------
@@ -441,7 +602,7 @@
   };
 
   // ---------- Chart + PM stats ----------
-  // series: [{ label, data:[per-bin values, may contain null], color }]
+  // series: [{ label, data:[per-reading values, may contain null], color }]
   function renderPM({ labels, series, totalReadings, xTitle, sourceNote }) {
     chartPointCount = labels.length;
 
@@ -515,7 +676,14 @@
         },
         scales: {
           x: { display: true, grid: { display: false }, title: { display: true, text: xTitle, font: { size: 10.5 } }, ticks: { maxTicksLimit: 10, autoSkip: true, font: { size: 10 } } },
-          y: { display: true, beginAtZero: true, grid: { color: '#ECEAE1' }, title: { display: true, text: 'PM2.5 (µg/m³)', font: { size: 10.5 } }, ticks: { font: { size: 10 } } }
+          y: {
+            display: true,
+            min: 0,
+            max: CHART_Y_MAX,
+            grid: { color: '#ECEAE1' },
+            title: { display: true, text: 'PM2.5 (µg/m³)', font: { size: 10.5 } },
+            ticks: { font: { size: 10 } }
+          }
         },
         onHover: (event, elements) => { if (elements && elements.length > 0) moveSensorMarkerTo(elements[0].index); }
       }
@@ -566,7 +734,8 @@
   }
 
   function renderFromProfiles(sessions, primary) {
-    const { labels, series, coordTrack } = buildTimeSeries(sessions, primary);
+    const { labels, series, coordTrack, routePoints } = buildTimeSeries(sessions, primary);
+    drawRoute(routePoints, primary.dist);
     setupHover(coordTrack);
     renderPM({
       labels, series,
@@ -597,14 +766,16 @@
       const sessions = [];
       const skipped = [];
       results.forEach(({ path, text }, i) => {
-        const rows = parseCSV(text, ',');
+        const { rows, sensorId } = airbeamRowsFromText(text);
         if (rows.length < MIN_ROWS) {
           skipped.push(`${path.split('/').pop()} (${rows.length} rows, need ${MIN_ROWS}+)`);
           return;
         }
         const s = parseSession(rows);
-        if (s) { s.id = shortId(AIRBEAM_FILES[i]); sessions.push(s); }
-        else skipped.push(`${path.split('/').pop()} (could not parse GPS/PM2.5/time)`);
+        if (s) {
+          s.id = shortId(path, sensorId ? sensorId.slice(-4) : String(i + 1));
+          sessions.push(s);
+        } else skipped.push(`${path.split('/').pop()} (could not parse GPS/PM2.5/time)`);
       });
       if (!sessions.length) {
         throw new Error(
@@ -616,7 +787,6 @@
 
       stage = 'render chart';
       const primary = sessions.reduce((a, b) => (b.count > a.count ? b : a));
-      drawRoute(downsample(primary.track, 400), primary.dist);
       renderFromProfiles(sessions, primary);
     } catch (err) {
       console.error(`AirBeam load failed (${stage}):`, err);
@@ -641,8 +811,11 @@
       if (!res.ok) throw new Error(`${SPOTS_FILE} returned HTTP ${res.status}`);
 
       stage = 'parse observations';
-      const spots = parseCSV(await res.text(), ';').map(normalizeSpot).filter(Boolean);
-      if (!spots.length) throw new Error('No valid observations found in spots CSV.');
+      const spots = parseCSV(await res.text(), ';')
+        .map(normalizeSpot)
+        .filter(Boolean)
+        .filter(spotInActivation);
+      if (!spots.length) throw new Error('No valid observations found for this activation (check SPOTS_FILTER).');
 
       stage = 'render map markers';
       renderSpots(spots);
