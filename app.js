@@ -474,7 +474,7 @@
     const total = spots.length;
 
     document.getElementById('kObs').textContent = total;
-    document.getElementById('kObsSub').textContent = `${posN} positive · ${negN} negative · ${neuN} neutral`;
+    document.getElementById('kObsSub').textContent = `${posN} pos · ${negN} neg · ${neuN} neu`;
 
     const denom = total || 1;
     document.getElementById('rPos').style.width = `${(posN / denom) * 100}%`;
@@ -834,4 +834,10 @@
 
   loadAirbeam();
   loadSpots();
+
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { map.invalidateSize(); }, 150);
+  });
 })();

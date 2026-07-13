@@ -238,12 +238,75 @@
   .popup-card .plabel{font-weight:600;font-size:13px;margin-bottom:4px;}
   .popup-card .pnote{font-size:12px;color:var(--muted);line-height:1.4;}
 
+  .kpi .k-label .k-short,
+  .kpi .k-sub .k-short{display:none;}
+
   @media (max-width: 1000px){
-    .dash{grid-template-columns:repeat(2,1fr);grid-template-rows:auto auto 320px 250px;height:auto;}
-    .kpi{grid-row:auto;}
-    .map-panel{grid-column:1 / -1;grid-row:auto;min-height:320px;}
-    .insight{grid-column:1 / -1;grid-row:auto;max-height:520px;}
-    .chart-panel{grid-column:1 / -1;grid-row:auto;}
+    .dash{
+      grid-template-columns:repeat(2,1fr);
+      grid-template-rows:none;
+      grid-auto-rows:auto;
+      height:auto;
+      min-height:100vh;
+    }
+    .kpi{
+      grid-row:auto;
+      order:1;
+      padding:8px 10px;
+      gap:2px;
+    }
+    .kpi .k-label{
+      font-size:8.5px;
+      letter-spacing:0.04em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .kpi .k-label .k-full,
+    .kpi .k-sub .k-full{display:none;}
+    .kpi .k-label .k-short,
+    .kpi .k-sub .k-short{display:inline;}
+    .kpi .k-value{font-size:18px;}
+    .kpi .k-value .u{font-size:9.5px;}
+    .kpi .k-sub{
+      font-size:9px;
+      line-height:1.25;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:100%;
+    }
+
+    .map-panel{
+      grid-column:1 / -1;
+      grid-row:auto;
+      order:2;
+      min-height:55vh;
+      height:55vh;
+    }
+    .chart-panel{
+      grid-column:1 / -1;
+      grid-row:auto;
+      order:3;
+      min-height:280px;
+      height:300px;
+    }
+    .insight{
+      grid-column:1 / -1;
+      grid-row:auto;
+      order:4;
+      max-height:none;
+      overflow-y:visible;
+    }
+    .insight .breakdown{overflow-y:visible;}
+    .map-filter{max-width:min(200px,70vw);}
+    .p-head{flex-wrap:wrap;gap:4px;}
+    .p-head .hint{max-width:100%;}
+  }
+
+  @media (max-width: 520px){
+    .dash{grid-template-columns:repeat(2,1fr);}
+    .kpi .k-value{font-size:16px;}
   }
 </style>
 </head>
@@ -272,14 +335,14 @@
     <div class="k-sub" id="kWhoSub">US EPA AQI</div>
   </div>
   <div class="panel kpi">
-    <div class="k-label">Observations</div>
+    <div class="k-label"><span class="k-full">Observations</span><span class="k-short">Obs</span></div>
     <div class="k-value" id="kObs">—</div>
     <div class="k-sub" id="kObsSub">livability features</div>
   </div>
   <div class="panel kpi">
-    <div class="k-label">Sensor spread</div>
+    <div class="k-label"><span class="k-full">Sensor spread</span><span class="k-short">Spread</span></div>
     <div class="k-value" id="kSpread">—<span class="u">µg/m³</span></div>
-    <div class="k-sub">max sensor disagreement</div>
+    <div class="k-sub"><span class="k-full">max sensor disagreement</span><span class="k-short">max Δ</span></div>
   </div>
 
   <section class="panel map-panel">
