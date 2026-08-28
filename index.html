@@ -13,22 +13,33 @@
 
 <style>
   :root{
-    --ink:#0F1B14;
-    --paper:#E9E7DE;
-    --panel:#FFFFFF;
-    --line:#D2CEC0;
-    --green:#1F5C3F;
-    --green-deep:#123825;
-    --lime:#C6E24E;
-    --coral:#E8593C;
-    --coral-deep:#A93A24;
-    --amber:#D69A2D;
-    --muted:#6B6A5F;
-    --track:#ECEAE1;
+    --ink:#EAF2FF;
+    --paper:#15273C;
+    --panel:#0f1d2e;
+    --line:#1e2d42;
+    --green:#5ED0A0;
+    --green-deep:#A9F0CB;
+    --lime:#D3F16A;
+    --coral:#FF7B72;
+    --coral-deep:#FFB0A8;
+    --amber:#F4C86A;
+    --muted:#9DB0C7;
+    --track:#1B2C3F;
+    --bg:#0e1b2b;
     font-family:'Inter',sans-serif;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;height:100%;background:var(--line);color:var(--ink);}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--ink);}
+  #map,
+  .leaflet-container{
+    background:var(--bg) !important;
+  }
+  /* Stadia's dark basemap ships neutral grey; recolour it to the navy in --bg.
+     Tuned so the #333333 land fill resolves to exactly #0e1b2b. Applied to the
+     tile pane only, so route lines and markers keep their own colours. */
+  .leaflet-tile-pane{
+    filter:grayscale(1) sepia(1) saturate(1.3) hue-rotate(173deg) brightness(0.79) contrast(1.3);
+  }
 
   /* Dense report grid: 1px gaps read as hairline dividers, no white space */
   .dash{
@@ -49,7 +60,7 @@
   }
 
   .p-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px;}
-  .p-head h2{font-family:'Space Grotesk',sans-serif;font-size:12.5px;font-weight:600;margin:0;letter-spacing:-0.01em;}
+  .p-head h2{font-family:'Space Grotesk',sans-serif;font-size:12.5px;font-weight:600;margin:0;letter-spacing:-0.01em;color:var(--ink);}
   .p-head .hint{font-size:10px;color:var(--muted);}
 
   /* ---- KPI strip (row 1) ---- */
@@ -74,8 +85,8 @@
   /* ---- Map category filter (left overlay) ---- */
   .map-filter{
     position:absolute;top:10px;left:10px;z-index:1000;
-    background:rgba(255,255,255,0.96);border:1px solid var(--line);
-    border-radius:8px;box-shadow:0 2px 10px rgba(15,27,20,0.12);
+    background:rgba(15,29,46,0.96);border:1px solid var(--line);
+    border-radius:8px;box-shadow:0 2px 10px rgba(2,6,12,0.35);
     font-size:11px;max-width:200px;
   }
   .map-filter .mf-toggle{
@@ -158,7 +169,7 @@
   .chart-wrap{flex:1;min-height:0;position:relative;}
   .load-error{padding:16px 14px;font-size:12px;color:var(--coral-deep);line-height:1.55;}
   .load-error .le-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;margin-bottom:8px;color:var(--ink);}
-  .load-error .le-detail{margin:8px 0;padding:8px 10px;background:#FFF5F3;border:1px solid #F0D4CC;border-radius:6px;font-family:monospace;font-size:11px;color:#8B2E1F;word-break:break-word;}
+  .load-error .le-detail{margin:8px 0;padding:8px 10px;background:rgba(255,123,114,0.10);border:1px solid rgba(255,123,114,0.25);border-radius:6px;font-family:monospace;font-size:11px;color:var(--coral-deep);word-break:break-word;}
   .load-error .le-hints{margin:8px 0 0;padding-left:18px;color:var(--muted);}
   .load-error .le-hints li{margin:4px 0;}
   .load-error .le-stage{font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);margin-bottom:6px;}
@@ -193,8 +204,9 @@
     padding:3px 8px;border-radius:3px;white-space:nowrap;
     box-shadow:0 1px 4px rgba(15,27,20,0.35);
   }
-  .route-endpoint.start .ep-label{background:var(--green);}
-  .route-endpoint.finish .ep-label{background:var(--ink);}
+  .route-endpoint.start .ep-label{background:var(--green);color:var(--bg);}
+  /* --ink is near-white, so the label needs dark text rather than the default #fff */
+  .route-endpoint.finish .ep-label{background:var(--ink);color:var(--bg);}
   .route-endpoint .ep-pin{
     width:0;height:0;
     border-left:6px solid transparent;border-right:6px solid transparent;
@@ -223,17 +235,18 @@
     width:14px;height:14px;border-radius:50%;background:#1E3FAE;
     border:2px solid #fff;box-shadow:0 0 0 4px rgba(30,63,174,0.30);
   }
-  .leaflet-popup-content-wrapper{border-radius:8px;}
+  .leaflet-popup-content-wrapper{border-radius:8px;background:var(--panel);color:var(--ink);box-shadow:0 8px 24px rgba(2,6,12,0.4);}
+  .leaflet-popup-tip{background:var(--panel);}
   .leaflet-popup.spot-popup a.leaflet-popup-close-button{
     top:6px;right:6px;width:22px;height:22px;line-height:20px;
-    border-radius:50%;background:rgba(15,27,20,0.7);color:#fff;
+    border-radius:50%;background:rgba(14,27,43,0.9);color:#fff;
     font-size:15px;font-weight:600;padding:0;text-align:center;z-index:2;
   }
   .leaflet-popup.spot-popup a.leaflet-popup-close-button:hover{background:var(--ink);color:#fff;}
-  .popup-card{font-family:'Inter',sans-serif;width:200px;position:relative;}
+  .popup-card{font-family:'Inter',sans-serif;width:200px;position:relative;color:var(--ink);}
   .popup-card img{width:100%;height:120px;object-fit:cover;border-radius:6px;margin-bottom:8px;display:block;}
   .popup-card .ptype{font-size:10px;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-bottom:4px;}
-  .popup-card .ptype.positive{color:var(--green);}
+  .popup-card .ptype.positive{color:var(--green-deep);}
   .popup-card .ptype.negative{color:var(--coral-deep);}
   .popup-card .plabel{font-weight:600;font-size:13px;margin-bottom:4px;}
   .popup-card .pnote{font-size:12px;color:var(--muted);line-height:1.4;}

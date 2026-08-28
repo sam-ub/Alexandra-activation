@@ -26,15 +26,15 @@
 
   // AirBeam 3 session export (AirCasting wide CSV).
   const AIRBEAM_FILES = [
-    'data/africa_clean_air_forum_pretoria_run_1968451__20260713-609362-kikvvf.csv',
+    'data/alexandra_activation_1972483__20260828-583192-m86dci.csv',
   ];
   // SpotterOn observations export (semicolon-delimited). Filtered to this activation.
-  const SPOTS_FILE = 'data/urbanbetter_spots_20260713124805.csv';
+  const SPOTS_FILE = 'data/urbanbetter_spots_20260828155620.csv';
   const SPOTS_FILTER = {
-    datePrefix: '2026-07-13',
-    // Pretoria / Africa Clean Air Forum run area
-    minLat: -25.80, maxLat: -25.70,
-    minLon: 28.22, maxLon: 28.30,
+    datePrefix: '2026-08-28',
+    // Alexandra activation area
+    minLat: -26.15, maxLat: -26.05,
+    minLon: 28.08, maxLon: 28.15,
   };
 
   const MIN_ROWS = 100;   // drop very short / aborted sessions
@@ -42,9 +42,9 @@
 
   // ---------- Map base ----------
   const map = L.map('map', { zoomControl: true, scrollWheelZoom: true });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png?api_key=7a892008-752a-4a39-bd1b-58417e3a0331', {
     maxZoom: 20,
-    attribution: '&copy; OpenStreetMap &copy; CARTO'
+    attribution: '&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap'
   }).addTo(map);
   map.setView([-25.7513, 28.2591], 17);
 
@@ -259,8 +259,9 @@
       const cat = aqiCategory(pt.pm);
       L.circleMarker([pt.lat, pt.lon], {
         radius: 5,
-        color: '#fff',
+        color: cat.bar,
         weight: 1,
+        opacity: 0.9,   // match fillOpacity so the outline doesn't read as a ring
         fillColor: cat.bar,
         fillOpacity: 0.9,
       }).addTo(map).bindTooltip(`${pt.pm.toFixed(1)} µg/m³ · ${cat.label}`);
@@ -306,6 +307,7 @@
     const categories = [...new Set([...posTags, ...negTags])];
     const type = negTags.length ? 'negative' : (posTags.length ? 'positive' : 'neutral');
     return {
+      id: s.ID || s.ROOT_ID || '',
       lat, lon, type, posTags, negTags, categories,
       image: pickImage(s),
       desc: s.DESCRIPTION || '',
@@ -355,6 +357,7 @@
     return `
       <div class="popup-card">
         ${sp.image ? `<img src="${escapeHtml(sp.image)}" alt="observation" onerror="this.style.display='none'"/>` : ''}
+        ${sp.id ? `<div class="pnote" style="margin-top:4px;opacity:.75">ID: ${escapeHtml(String(sp.id))}</div>` : ''}
         <div class="ptype ${sp.type}">${typeLabel}</div>
         ${sp.posTags.length ? `<div class="plabel" style="color:var(--green)">+ ${escapeHtml(sp.posTags.join(', '))}</div>` : ''}
         ${sp.negTags.length ? `<div class="plabel" style="color:var(--coral-deep)">− ${escapeHtml(sp.negTags.join(', '))}</div>` : ''}
@@ -413,15 +416,10 @@
     map.closePopup();
     spotClusterGroup.clearLayers();
     const visible = allSpots.filter(spotMatchesFilter);
-    const markers = visible.map(sp => {
+    visible.map(sp => {
       const m = makeSpotMarker(sp);
       spotClusterGroup.addLayer(m);
       return m;
-    });
-    // Open the usual click-popup by default — one per nearby cluster of points.
-    const openKeys = new Set(pickDefaultPopupSpots(visible).map(sp => `${sp.lat.toFixed(6)},${sp.lon.toFixed(6)},${sp.time}`));
-    markers.forEach(m => {
-      if (openKeys.has(m.options.spotKey)) m.openPopup();
     });
   }
 
